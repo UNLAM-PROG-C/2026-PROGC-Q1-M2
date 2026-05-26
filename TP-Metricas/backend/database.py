@@ -1,13 +1,11 @@
 import threading
-import psycopg2
-import psycopg2.extras
-from psycopg2 import pool
 from contextlib import contextmanager
+from psycopg_pool import ConnectionPool
 from config import (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
                     DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS)
 
-# Thread-safe connection pool (OS-level thread synchronization via psycopg2's ThreadedConnectionPool)
-_pool: pool.ThreadedConnectionPool = None
+# Thread-safe connection pool (psycopg 3.x handles thread synchronization internally)
+_pool = None
 _pool_lock = threading.Lock()
 
 
@@ -15,19 +13,15 @@ def init_pool():
     global _pool
     with _pool_lock:
         if _pool is None:
-            _pool = pool.ThreadedConnectionPool(
-                minconn=DB_MIN_CONNECTIONS,
-                maxconn=DB_MAX_CONNECTIONS,
-                host=DB_HOST,
-                port=DB_PORT,
-                dbname=DB_NAME,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                options="-c client_encoding=UTF8"
+            conninfo = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} client_encoding=UTF8"
+            _pool = ConnectionPool(
+                conninfo,
+                min_size=DB_MIN_CONNECTIONS,
+                max_size=DB_MAX_CONNECTIONS
             )
 
 
-def get_pool() -> pool.ThreadedConnectionPool:
+def get_pool():
     if _pool is None:
         init_pool()
     return _pool
@@ -50,7 +44,7 @@ def get_cursor(commit: bool = True):
     p = get_pool()
     conn = p.getconn()
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        with conn.cursor() as cur:
             yield cur, conn
             if commit:
                 conn.commit()
@@ -66,5 +60,5 @@ def get_cursor(commit: bool = True):
 def close_pool():
     global _pool
     if _pool:
-        _pool.closeall()
+        _pool.close()
         _pool = None

@@ -1,4 +1,3 @@
-import psycopg2.extras
 from typing import List, Tuple, Dict
 from database import get_pool, get_cursor
 from config import RESERVATION_TIMEOUT_MINUTES
@@ -39,7 +38,7 @@ def reserve_seats(
     conn = p.getconn()
 
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        with conn.cursor() as cur:
             for seat_id in seat_ids:
                 # Fetch seat metadata for logging (inside same transaction)
                 cur.execute(
@@ -51,7 +50,8 @@ def reserve_seats(
                     """,
                     (seat_id, concert_id),
                 )
-                info = cur.fetchone()
+                row = cur.fetchone()
+                info = dict(row) if row else None
                 if not info:
                     conn.rollback()
                     return False, f"Asiento ID {seat_id} no encontrado en este recital.", []

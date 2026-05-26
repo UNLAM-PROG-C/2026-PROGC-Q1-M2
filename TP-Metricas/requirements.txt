@@ -1,7 +1,8 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-psycopg2-binary==2.9.9
-PyJWT==2.8.1
+fastapi==0.109.0
+uvicorn==0.27.0
+psycopg[binary]==3.2.13
+psycopg_pool==3.2.4
+PyJWT==2.8.0
 python-multipart==0.0.6
 passlib==1.7.4
 python-jose==3.3.0

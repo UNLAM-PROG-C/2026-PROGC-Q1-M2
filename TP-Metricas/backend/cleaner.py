@@ -1,6 +1,5 @@
 import threading
 import logging
-import psycopg2.extras
 from database import get_pool
 from ws_manager import manager as ws_manager
 from config import CLEANUP_INTERVAL_SECONDS
@@ -15,7 +14,7 @@ class ReservationCleaner(threading.Thread):
     OS-level concurrency concepts used:
     - threading.Thread: an OS-managed thread running independently of the web server
     - threading.Event: used as a cancellable sleep (stop signal + timeout)
-    - psycopg2 ThreadedConnectionPool: each call gets its own DB connection safely
+    - psycopg ConnectionPool: each call gets its own DB connection safely
 
     The cleanup query is itself atomic: it only touches seats where the expiry
     timestamp has passed, so it cannot conflict with the reservation UPDATE in
@@ -43,7 +42,7 @@ class ReservationCleaner(threading.Thread):
         p = get_pool()
         conn = p.getconn()
         try:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            with conn.cursor() as cur:
                 cur.execute(
                     """
                     UPDATE seats

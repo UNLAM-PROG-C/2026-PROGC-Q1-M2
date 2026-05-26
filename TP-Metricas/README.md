@@ -15,7 +15,7 @@ Un sistema completo de reserva y venta de entradas para recitales con manejo ava
 
 ## 📋 Requisitos Previos
 
-- **Python 3.15+**
+- **Python 3.14+**
 - **PostgreSQL 18+**
 - **pip** (Python package manager)
 
