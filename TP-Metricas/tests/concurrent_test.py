@@ -7,7 +7,7 @@ Simulates multiple users trying to reserve the same seats simultaneously.
 import asyncio
 import aiohttp
 import time
-import json
+import os
 import sys
 from typing import List, Dict
 from dataclasses import dataclass
@@ -239,7 +239,10 @@ class TicketSystemTester:
 
 async def main():
     """Main test execution."""
-    base_url = "http://localhost:8000"
+    base_url = sys.argv[1] if len(sys.argv) > 1 else os.getenv(
+        "BASE_URL",
+        "http://localhost:8000",
+    )
 
     print("=" * 60)
     print("🎤 Sistema de Venta de Entradas - Prueba de Concurrencia")
