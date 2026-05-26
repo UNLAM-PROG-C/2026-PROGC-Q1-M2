@@ -7,7 +7,7 @@ Simulates multiple users trying to reserve the same seats simultaneously.
 import asyncio
 import aiohttp
 import time
-import json
+import os
 import sys
 from typing import List, Dict
 from dataclasses import dataclass
@@ -28,6 +28,7 @@ class TicketSystemTester:
         self.session = None
         self.concert_id = None
         self.token = None
+        self.user_tokens: Dict[int, str] = {}
         self.results: List[TestResult] = []
 
     async def setup(self):
@@ -51,11 +52,23 @@ class TicketSystemTester:
                 raise Exception(f"Login failed: {await resp.text()}")
             data = await resp.json()
             self.token = data["access_token"]
+            token = self.token
             print(f"✅ Autenticado como {username}")
 
-    async def _get_headers(self):
+            return token
+
+    async def _get_headers(self, token: str = None):
         """Get headers with JWT token."""
-        return {"Authorization": f"Bearer {self.token}"}
+        return {"Authorization": f"Bearer {token or self.token}"}
+
+    async def _ensure_user_tokens(self, num_users: int):
+        """Authenticate several users so concurrent tests use distinct users."""
+        for user_num in range(1, num_users + 1):
+            if user_num not in self.user_tokens:
+                self.user_tokens[user_num] = await self._login(
+                    f"testuser{user_num}",
+                    "test123",
+                )
 
     async def select_concert(self, concert_id: int = 1):
         """Select a concert for the test."""
@@ -82,10 +95,12 @@ class TicketSystemTester:
             print(f"💺 Asientos disponibles: {len(available)}")
             return available
 
-    async def reserve_seats(self, user_id: int, seat_ids: List[int]) -> TestResult:
+    async def reserve_seats(
+        self, user_id: int, seat_ids: List[int], token: str = None
+    ) -> TestResult:
         """Try to reserve seats for a user."""
         url = f"{self.base_url}/api/seats/reserve"
-        headers = await self._get_headers()
+        headers = await self._get_headers(token)
         payload = {
             "seat_ids": seat_ids,
             "concert_id": self.concert_id,
@@ -134,6 +149,7 @@ class TicketSystemTester:
         print(f"   - Usuarios simultáneos: {num_users}")
         print(f"   - Asientos por usuario: {seats_per_user}")
 
+        await self._ensure_user_tokens(num_users)
         available_seats = await self.get_available_seats()
         if len(available_seats) < seats_per_user * num_users:
             print(
@@ -146,7 +162,11 @@ class TicketSystemTester:
         for user_num in range(1, num_users + 1):
             # All users try to reserve the same first N seats
             seat_ids = available_seats[:seats_per_user]
-            task = self.reserve_seats(user_num, seat_ids)
+            task = self.reserve_seats(
+                user_num,
+                seat_ids,
+                self.user_tokens[user_num],
+            )
             tasks.append(task)
 
         # Execute all reservations concurrently
@@ -195,13 +215,18 @@ class TicketSystemTester:
         print(f"   - Usuarios: {num_users}")
         print(f"   - Asientos por usuario: 2")
 
+        await self._ensure_user_tokens(num_users)
         tasks = []
         for user_num in range(1, num_users + 1):
             # Each user gets different seats
             start_idx = (user_num - 1) * 2
             seat_ids = available_seats[start_idx : start_idx + 2]
             if seat_ids:
-                task = self.reserve_seats(user_num, seat_ids)
+                task = self.reserve_seats(
+                    user_num,
+                    seat_ids,
+                    self.user_tokens[user_num],
+                )
                 tasks.append(task)
 
         print(f"📤 Enviando {len(tasks)} solicitudes...")
@@ -214,7 +239,10 @@ class TicketSystemTester:
 
 async def main():
     """Main test execution."""
-    base_url = "http://localhost:8000"
+    base_url = sys.argv[1] if len(sys.argv) > 1 else os.getenv(
+        "BASE_URL",
+        "http://localhost:8000",
+    )
 
     print("=" * 60)
     print("🎤 Sistema de Venta de Entradas - Prueba de Concurrencia")

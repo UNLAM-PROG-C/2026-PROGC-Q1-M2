@@ -1,6 +1,7 @@
 import threading
 from contextlib import contextmanager
 from psycopg_pool import ConnectionPool
+from psycopg.rows import dict_row
 from config import (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
                     DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS)
 
@@ -17,7 +18,8 @@ def init_pool():
             _pool = ConnectionPool(
                 conninfo,
                 min_size=DB_MIN_CONNECTIONS,
-                max_size=DB_MAX_CONNECTIONS
+                max_size=DB_MAX_CONNECTIONS,
+                kwargs={"row_factory": dict_row},
             )
 
 
