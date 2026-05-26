@@ -33,13 +33,14 @@ def reserve_seats(
     If any seat in the batch fails, the whole transaction is rolled back so
     no partial reservations are left for this user.
     """
+    ordered_seat_ids = sorted(set(seat_ids))
     reserved: List[Dict] = []
     p = get_pool()
     conn = p.getconn()
 
     try:
         with conn.cursor() as cur:
-            for seat_id in seat_ids:
+            for seat_id in ordered_seat_ids:
                 # Fetch seat metadata for logging (inside same transaction)
                 cur.execute(
                     """
@@ -146,28 +147,45 @@ def release_seats(
 def confirm_purchase(
     seat_ids: List[int], user_id: int, concert_id: int
 ) -> Tuple[bool, str]:
-    with get_cursor() as (cur, conn):
-        cur.execute(
-            """
-            UPDATE seats
-            SET status                  = 'sold',
-                sold_at                 = NOW(),
-                sold_to                 = %s,
-                reserved_by             = NULL,
-                reserved_at             = NULL,
-                reservation_expires_at  = NULL
-            WHERE id = ANY(%s) AND reserved_by = %s AND status = 'reserved'
-            RETURNING id, section, row_label, seat_number, price
-            """,
-            (user_id, seat_ids, user_id),
-        )
-        sold = [dict(row) for row in cur.fetchall()]
+    requested_count = len(set(seat_ids))
+    p = get_pool()
+    conn = p.getconn()
 
-    if len(sold) != len(seat_ids):
-        return (
-            False,
-            "Algunos asientos no pudieron confirmarse (reserva expirada o inválida).",
-        )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE seats
+                SET status                  = 'sold',
+                    sold_at                 = NOW(),
+                    sold_to                 = %s,
+                    reserved_by             = NULL,
+                    reserved_at             = NULL,
+                    reservation_expires_at  = NULL
+                WHERE id = ANY(%s)
+                  AND concert_id = %s
+                  AND reserved_by = %s
+                  AND status = 'reserved'
+                  AND reservation_expires_at >= NOW()
+                RETURNING id, section, row_label, seat_number, price
+                """,
+                (user_id, seat_ids, concert_id, user_id),
+            )
+            sold = [dict(row) for row in cur.fetchall()]
+
+        if len(sold) != requested_count:
+            conn.rollback()
+            return (
+                False,
+                "Algunos asientos no pudieron confirmarse (reserva expirada o invalida).",
+            )
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        p.putconn(conn)
 
     total = sum(float(s["price"]) for s in sold)
 
