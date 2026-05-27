@@ -26,13 +26,13 @@ def reserve_seats(
     """
     Atomically reserves one or more seats.
 
-    Concurrency strategy: intenta el UPDATE directamente (camino feliz, 1 query).
-    Solo si falla (rowcount=0) hace un SELECT extra para armar el mensaje de error.
+    Concurrency strategy: attempts the UPDATE directly (happy path, 1 query).
+    Only if it fails (rowcount=0) does it run an extra SELECT to build the error message.
 
-    Seat IDs se ordenan antes de procesar para evitar deadlocks cuando dos usuarios
-    intentan reservar el mismo conjunto de asientos en distinto orden.
+    Seat IDs are sorted before processing to prevent deadlocks when two users
+    try to reserve the same set of seats in different order.
 
-    Si cualquier asiento falla, se hace rollback de toda la transacción.
+    If any seat fails, the entire transaction is rolled back.
     """
     ordered_seat_ids = sorted(set(seat_ids))
     reserved: List[Dict] = []
@@ -42,7 +42,7 @@ def reserve_seats(
     try:
         with conn.cursor() as cur:
             for seat_id in ordered_seat_ids:
-                # Camino feliz: intento de reserva directo, sin SELECT previo
+                # Happy path: attempt reservation directly, no prior SELECT
                 cur.execute(
                     """
                     UPDATE seats
@@ -61,7 +61,7 @@ def reserve_seats(
                     reserved.append(dict(result))
                     continue
 
-                # Camino de error: rollback y SELECT solo para armar el mensaje
+                # Failure path: rollback and SELECT only to build the error message
                 conn.rollback()
                 cur.execute(
                     """

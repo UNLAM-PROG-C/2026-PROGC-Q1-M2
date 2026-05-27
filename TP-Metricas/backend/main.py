@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     logger.info("Iniciando Sistema de Venta de Entradas…")
     init_pool()
     load_all_concerts()
-    # get_running_loop() es la forma correcta dentro de un contexto async (Python 3.10+)
+    # get_running_loop() is the correct call inside an async context (Python 3.10+)
     ws_manager.set_event_loop(asyncio.get_running_loop())
     start_cleaner()
     logger.info("Sistema iniciado correctamente.")
@@ -92,7 +92,7 @@ def login(request: Request, body: LoginRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos.",
         )
-    # Se embebe username en el token para evitar una query DB por cada request
+    # Username is embedded in the token to avoid a DB query on every authenticated request
     token = create_access_token({"sub": user["id"], "username": user["username"]})
     return {
         "access_token": token,
@@ -108,7 +108,7 @@ def login(request: Request, body: LoginRequest):
 
 @app.get("/api/auth/me")
 def get_me(current_user: dict = Depends(get_current_user)):
-    # Este endpoint sí necesita los datos completos del usuario → query a la DB
+    # This endpoint needs the full user record → hit the DB
     with get_cursor(commit=False) as (cur, conn):
         cur.execute(
             "SELECT id, username, email, full_name FROM users WHERE id = %s",
@@ -240,7 +240,7 @@ async def process(
             detail="No se encontraron asientos reservados válidos para este usuario.",
         )
 
-    # await: no bloquea el event loop durante la simulación de latencia de pago
+    # await: does not block the event loop during payment latency simulation
     payment_result = await process_payment(current_user["id"], total, request.payment_method)
 
     success, message = confirm_purchase(

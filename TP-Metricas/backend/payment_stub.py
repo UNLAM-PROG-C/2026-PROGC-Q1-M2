@@ -8,7 +8,7 @@ async def process_payment(user_id: int, amount: float, payment_method: str = "cr
     """
     Payment stub: simulates an external payment gateway.
     Always returns success. asyncio.sleep simulates network latency
-    without bloquear un thread del pool de FastAPI.
+    without blocking a thread from FastAPI's thread pool.
     Replace this with a real payment provider integration in production.
     """
     await asyncio.sleep(random.uniform(0.3, 0.8))
