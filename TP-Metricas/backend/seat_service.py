@@ -1,6 +1,6 @@
 from typing import List, Tuple, Dict
 from database import get_pool, get_cursor
-from config import RESERVATION_TIMEOUT_MINUTES
+from config import RESERVATION_TIMEOUT_MINUTES, POOL_ACQUIRE_TIMEOUT
 import race_logger
 from ws_manager import manager as ws_manager
 
@@ -26,39 +26,23 @@ def reserve_seats(
     """
     Atomically reserves one or more seats.
 
-    Concurrency strategy: each UPDATE uses WHERE status='available' — the DB
-    guarantees atomicity, so only one concurrent request per seat can succeed.
-    If the returned rowcount is 0, a race condition occurred and we log it.
+    Concurrency strategy: attempts the UPDATE directly (happy path, 1 query).
+    Only if it fails (rowcount=0) does it run an extra SELECT to build the error message.
 
-    If any seat in the batch fails, the whole transaction is rolled back so
-    no partial reservations are left for this user.
+    Seat IDs are sorted before processing to prevent deadlocks when two users
+    try to reserve the same set of seats in different order.
+
+    If any seat fails, the entire transaction is rolled back.
     """
     ordered_seat_ids = sorted(set(seat_ids))
     reserved: List[Dict] = []
     p = get_pool()
-    conn = p.getconn()
+    conn = p.getconn(timeout=POOL_ACQUIRE_TIMEOUT)
 
     try:
         with conn.cursor() as cur:
             for seat_id in ordered_seat_ids:
-                # Fetch seat metadata for logging (inside same transaction)
-                cur.execute(
-                    """
-                    SELECT s.section, s.row_label, s.seat_number, c.name AS concert_name
-                    FROM seats s
-                    JOIN concerts c ON c.id = s.concert_id
-                    WHERE s.id = %s AND s.concert_id = %s
-                    """,
-                    (seat_id, concert_id),
-                )
-                row = cur.fetchone()
-                info = dict(row) if row else None
-                if not info:
-                    conn.rollback()
-                    return False, f"Asiento ID {seat_id} no encontrado en este recital.", []
-
-                # ATOMIC reservation: only succeeds if status = 'available'
-                # This WHERE clause is the primary race-condition guard
+                # Happy path: attempt reservation directly, no prior SELECT
                 cur.execute(
                     """
                     UPDATE seats
@@ -73,27 +57,42 @@ def reserve_seats(
                 )
                 result = cur.fetchone()
 
-                if result is None:
-                    # rowcount = 0 → race condition: another user got here first
-                    label = (
-                        f"{info['section'].upper()} "
-                        f"{info['row_label']}{info['seat_number']}"
-                    )
-                    conn.rollback()
-                    race_logger.log_race_condition(
-                        seat_id=seat_id,
-                        seat_label=label,
-                        concert_name=info["concert_name"],
-                        loser_username=username,
-                        loser_user_id=user_id,
-                    )
-                    return (
-                        False,
-                        f"El asiento {label} ya fue seleccionado por otro usuario.",
-                        [],
-                    )
+                if result is not None:
+                    reserved.append(dict(result))
+                    continue
 
-                reserved.append(dict(result))
+                # Failure path: rollback and SELECT only to build the error message
+                conn.rollback()
+                cur.execute(
+                    """
+                    SELECT s.section, s.row_label, s.seat_number, c.name AS concert_name
+                    FROM seats s
+                    JOIN concerts c ON c.id = s.concert_id
+                    WHERE s.id = %s AND s.concert_id = %s
+                    """,
+                    (seat_id, concert_id),
+                )
+                info = cur.fetchone()
+
+                if info is None:
+                    return False, f"Asiento ID {seat_id} no encontrado en este recital.", []
+
+                label = (
+                    f"{info['section'].upper()} "
+                    f"{info['row_label']}{info['seat_number']}"
+                )
+                race_logger.log_race_condition(
+                    seat_id=seat_id,
+                    seat_label=label,
+                    concert_name=info["concert_name"],
+                    loser_username=username,
+                    loser_user_id=user_id,
+                )
+                return (
+                    False,
+                    f"El asiento {label} ya fue seleccionado por otro usuario.",
+                    [],
+                )
 
         conn.commit()
     except Exception:
@@ -149,7 +148,7 @@ def confirm_purchase(
 ) -> Tuple[bool, str]:
     requested_count = len(set(seat_ids))
     p = get_pool()
-    conn = p.getconn()
+    conn = p.getconn(timeout=POOL_ACQUIRE_TIMEOUT)
 
     try:
         with conn.cursor() as cur:

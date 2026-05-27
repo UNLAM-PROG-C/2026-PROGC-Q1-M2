@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+
+import jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -33,6 +34,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
+    """
+    Valida el JWT y devuelve {id, username} sin tocar la base de datos.
+    Los datos de usuario completos (email, full_name) se obtienen solo cuando
+    el endpoint los necesita explícitamente (ej: GET /api/auth/me).
+    """
     token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,23 +48,16 @@ def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
-        if user_id is None:
+        username = payload.get("username")
+        if user_id is None or username is None:
             raise credentials_exception
         user_id = int(user_id)
-    except JWTError:
+    except jwt.PyJWTError:
         raise credentials_exception
     except (TypeError, ValueError):
         raise credentials_exception
 
-    with get_cursor(commit=False) as (cur, conn):
-        cur.execute(
-            "SELECT id, username, email, full_name FROM users WHERE id = %s",
-            (user_id,),
-        )
-        user = cur.fetchone()
-        if user is None:
-            raise credentials_exception
-    return dict(user)
+    return {"id": user_id, "username": username}
 
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:

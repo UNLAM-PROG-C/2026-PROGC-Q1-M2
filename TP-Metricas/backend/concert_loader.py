@@ -7,6 +7,46 @@ from config import DATA_DIR
 logger = logging.getLogger(__name__)
 
 VALID_SECTIONS = ("campo", "platea", "platea_vip")
+REQUIRED_TOP_FIELDS = {"name", "artist", "event_date", "venue", "sections"}
+REQUIRED_SECTION_FIELDS = {"rows", "seats_per_row", "price"}
+
+
+def _validate_concert_json(data: dict, filename: str) -> None:
+    """Valida los campos requeridos del JSON antes de procesar."""
+    missing = REQUIRED_TOP_FIELDS - set(data.keys())
+    if missing:
+        raise ValueError(
+            f"Campos requeridos faltantes en '{filename}': {sorted(missing)}"
+        )
+
+    if not isinstance(data["sections"], dict) or not data["sections"]:
+        raise ValueError(
+            f"'sections' debe ser un dict no vacío en '{filename}'"
+        )
+
+    for section_name, section_cfg in data["sections"].items():
+        if not isinstance(section_cfg, dict):
+            raise ValueError(
+                f"Sección '{section_name}' en '{filename}' debe ser un dict"
+            )
+        missing_fields = REQUIRED_SECTION_FIELDS - set(section_cfg.keys())
+        if missing_fields:
+            raise ValueError(
+                f"Sección '{section_name}' en '{filename}' le faltan campos: "
+                f"{sorted(missing_fields)}"
+            )
+        if not isinstance(section_cfg["rows"], int) or section_cfg["rows"] <= 0:
+            raise ValueError(
+                f"'rows' debe ser un entero positivo en '{section_name}' de '{filename}'"
+            )
+        if not isinstance(section_cfg["seats_per_row"], int) or section_cfg["seats_per_row"] <= 0:
+            raise ValueError(
+                f"'seats_per_row' debe ser un entero positivo en '{section_name}' de '{filename}'"
+            )
+        if not isinstance(section_cfg["price"], (int, float)) or section_cfg["price"] < 0:
+            raise ValueError(
+                f"'price' debe ser un número no negativo en '{section_name}' de '{filename}'"
+            )
 
 
 def load_concert_from_json(file_path: str) -> int:
@@ -15,6 +55,7 @@ def load_concert_from_json(file_path: str) -> int:
         data = json.load(f)
 
     filename = os.path.basename(file_path)
+    _validate_concert_json(data, filename)
 
     with get_cursor() as (cur, conn):
         cur.execute(

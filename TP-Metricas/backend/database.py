@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from psycopg_pool import ConnectionPool
 from psycopg.rows import dict_row
 from config import (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
-                    DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS)
+                    DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS, POOL_ACQUIRE_TIMEOUT)
 
 # Thread-safe connection pool (psycopg 3.x handles thread synchronization internally)
 _pool = None
@@ -33,7 +33,7 @@ def get_pool():
 def get_connection():
     """Context manager that yields a raw DB connection from the pool."""
     p = get_pool()
-    conn = p.getconn()
+    conn = p.getconn(timeout=POOL_ACQUIRE_TIMEOUT)
     try:
         yield conn
     finally:
@@ -44,7 +44,7 @@ def get_connection():
 def get_cursor(commit: bool = True):
     """Context manager that yields (cursor, conn). Auto-commits or rolls back."""
     p = get_pool()
-    conn = p.getconn()
+    conn = p.getconn(timeout=POOL_ACQUIRE_TIMEOUT)
     try:
         with conn.cursor() as cur:
             yield cur, conn
