@@ -4,13 +4,16 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import (
-    FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+    FastAPI, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-from config import FRONTEND_DIR, LOG_DIR
+from config import FRONTEND_DIR, LOG_DIR, LOGIN_RATE_LIMIT
 from database import init_pool, close_pool, get_cursor
 from auth import authenticate_user, create_access_token, get_current_user
 from models import LoginRequest, ReserveSeatsRequest, ReleaseSeatsRequest, PaymentRequest
@@ -41,9 +44,8 @@ async def lifespan(app: FastAPI):
     logger.info("Iniciando Sistema de Venta de Entradas…")
     init_pool()
     load_all_concerts()
-    # Give the WebSocket manager a reference to the running event loop so
-    # background threads can schedule broadcasts with run_coroutine_threadsafe
-    ws_manager.set_event_loop(asyncio.get_event_loop())
+    # get_running_loop() es la forma correcta dentro de un contexto async (Python 3.10+)
+    ws_manager.set_event_loop(asyncio.get_running_loop())
     start_cleaner()
     logger.info("Sistema iniciado correctamente.")
     yield
@@ -71,20 +73,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 
 @app.post("/api/auth/login")
-def login(request: LoginRequest):
-    user = authenticate_user(request.username, request.password)
+@limiter.limit(LOGIN_RATE_LIMIT)
+def login(request: Request, body: LoginRequest):
+    user = authenticate_user(body.username, body.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos.",
         )
-    token = create_access_token({"sub": user["id"]})
+    # Se embebe username en el token para evitar una query DB por cada request
+    token = create_access_token({"sub": user["id"], "username": user["username"]})
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -99,7 +108,16 @@ def login(request: LoginRequest):
 
 @app.get("/api/auth/me")
 def get_me(current_user: dict = Depends(get_current_user)):
-    return current_user
+    # Este endpoint sí necesita los datos completos del usuario → query a la DB
+    with get_cursor(commit=False) as (cur, conn):
+        cur.execute(
+            "SELECT id, username, email, full_name FROM users WHERE id = %s",
+            (current_user["id"],),
+        )
+        user = cur.fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        return dict(user)
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +125,10 @@ def get_me(current_user: dict = Depends(get_current_user)):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/concerts")
-def list_concerts():
+def list_concerts(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+):
     with get_cursor(commit=False) as (cur, conn):
         cur.execute(
             """
@@ -119,7 +140,9 @@ def list_concerts():
             WHERE c.is_active = TRUE
             GROUP BY c.id
             ORDER BY c.event_date
-            """
+            LIMIT %s OFFSET %s
+            """,
+            (limit, skip),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -197,7 +220,7 @@ def release(
 # ---------------------------------------------------------------------------
 
 @app.post("/api/payment/process")
-def process(
+async def process(
     request: PaymentRequest, current_user: dict = Depends(get_current_user)
 ):
     with get_cursor(commit=False) as (cur, conn):
@@ -217,7 +240,8 @@ def process(
             detail="No se encontraron asientos reservados válidos para este usuario.",
         )
 
-    payment_result = process_payment(current_user["id"], total, request.payment_method)
+    # await: no bloquea el event loop durante la simulación de latencia de pago
+    payment_result = await process_payment(current_user["id"], total, request.payment_method)
 
     success, message = confirm_purchase(
         seat_ids=request.seat_ids,
@@ -254,7 +278,10 @@ async def websocket_endpoint(websocket: WebSocket, concert_id: int):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/admin/race-conditions")
-def race_conditions(current_user: dict = Depends(get_current_user)):
+def race_conditions(
+    current_user: dict = Depends(get_current_user),
+    limit: int = Query(default=50, ge=1, le=500),
+):
     with get_cursor(commit=False) as (cur, conn):
         cur.execute(
             """
@@ -265,8 +292,9 @@ def race_conditions(current_user: dict = Depends(get_current_user)):
             LEFT JOIN seats s ON s.id = rcl.seat_id
             LEFT JOIN concerts c ON c.id = s.concert_id
             ORDER BY rcl.occurred_at DESC
-            LIMIT 200
-            """
+            LIMIT %s
+            """,
+            (limit,),
         )
         return [dict(row) for row in cur.fetchall()]
 

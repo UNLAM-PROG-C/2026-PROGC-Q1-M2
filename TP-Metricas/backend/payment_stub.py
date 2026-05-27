@@ -1,15 +1,17 @@
-import time
+import asyncio
 import random
+import time
 from typing import Dict
 
 
-def process_payment(user_id: int, amount: float, payment_method: str = "credit_card") -> Dict:
+async def process_payment(user_id: int, amount: float, payment_method: str = "credit_card") -> Dict:
     """
     Payment stub: simulates an external payment gateway.
-    Always returns success. A small sleep simulates network latency.
+    Always returns success. asyncio.sleep simulates network latency
+    without bloquear un thread del pool de FastAPI.
     Replace this with a real payment provider integration in production.
     """
-    time.sleep(random.uniform(0.3, 0.8))
+    await asyncio.sleep(random.uniform(0.3, 0.8))
 
     return {
         "success": True,

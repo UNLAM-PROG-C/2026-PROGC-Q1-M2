@@ -2,7 +2,7 @@ import threading
 import logging
 from database import get_pool
 from ws_manager import manager as ws_manager
-from config import CLEANUP_INTERVAL_SECONDS
+from config import CLEANUP_INTERVAL_SECONDS, POOL_ACQUIRE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class ReservationCleaner(threading.Thread):
 
     def _cleanup(self):
         p = get_pool()
-        conn = p.getconn()
+        conn = p.getconn(timeout=POOL_ACQUIRE_TIMEOUT)
         try:
             with conn.cursor() as cur:
                 cur.execute(

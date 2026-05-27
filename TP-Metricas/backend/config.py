@@ -17,12 +17,20 @@ DB_NAME = os.getenv("DB_NAME", "ticketdb")
 DB_USER = os.getenv("DB_USER", "ticketuser")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "ticketpass")
 DB_MIN_CONNECTIONS = int(os.getenv("DB_MIN_CONNECTIONS", "5"))
-DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "20"))
+# Para conexiones directas a PostgreSQL, 100 es un valor razonable en producción.
+# PostgreSQL default max_connections=100; para escalar a miles de conexiones
+# virtuales se necesita PgBouncer delante del servidor.
+DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "100"))
+# Tiempo máximo (segundos) esperando una conexión libre del pool antes de fallar
+POOL_ACQUIRE_TIMEOUT = float(os.getenv("POOL_ACQUIRE_TIMEOUT", "30"))
 
 # JWT
+# Límite de intentos de login por IP (ej: "10/minute", "5/minute")
+LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "30/minute")
+
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey-change-in-production-2026")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 120
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
 
 # Paths
 DATA_DIR = os.path.join(ROOT_DIR, "data")
