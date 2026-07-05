@@ -97,7 +97,7 @@ El sistema permite a varios usuarios, de manera concurrente, autenticarse, explo
 
 ### 1. Clonar el repositorio
 ```bash
-cd /Users/kevin.arias/Documents/Git/programacion-concurrente/tp-metricas
+cd programacion-concurrente/TP-Integrador
 ```
 
 ### 2. Instalar dependencias
@@ -342,5 +342,4 @@ El sistema evita deadlocks mediante:
 Este proyecto es parte de un trabajo académico de Programación Concurrente.
 
 ## 👤 Autor
-
-Kevin Arias - kevinnahuelarias@gmail.com
+Grupo M2 - Cátedra de Programación Concurrente - Cursada Miércoles Noche, 1C 2026.
