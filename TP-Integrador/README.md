@@ -2,6 +2,36 @@
 
 Un sistema completo de reserva y venta de entradas para recitales con manejo avanzado de concurrencia, construido con Python, FastAPI y PostgreSQL.
 
+## 📌 Alcance del Proyecto
+
+Este proyecto implementa una **aplicación web de venta de entradas para recitales** cuyo objetivo central es resolver, de forma correcta y demostrable, los problemas de **concurrencia** que surgen cuando múltiples usuarios interactúan simultáneamente sobre un recurso compartido y limitado: los asientos de un evento.
+
+### Descripción de la solución
+
+El sistema permite a varios usuarios, de manera concurrente, autenticarse, explorar recitales, seleccionar asientos, reservarlos temporalmente y confirmar su compra. El desafío principal es garantizar que **un mismo asiento nunca sea vendido a dos personas distintas**, aun cuando ambas intenten reservarlo en el mismo instante. La solución aborda esto en varias capas:
+
+- **Exclusión mutua a nivel de base de datos:** la reserva se resuelve con una operación atómica (`UPDATE ... WHERE status = 'available'`) apoyada en el *row-level locking* de PostgreSQL. Esta es la garantía de correctitud, y se delega a la base de datos para que sea válida incluso si el sistema se ejecuta en múltiples procesos o servidores.
+- **Prevención de deadlocks:** al reservar varios asientos, los identificadores se ordenan para imponer un orden de adquisición global y evitar la espera circular.
+- **Concurrencia en el servidor:** el backend combina un *event loop* asíncrono (para las conexiones WebSocket y el I/O de red) con *threads worker* (para las operaciones bloqueantes contra la base de datos), coordinados mediante un *pool* de conexiones thread-safe (concurrencia manejada por el Pool de conexiones).
+- **Actualizaciones en tiempo real:** mediante WebSockets, los cambios de estado de los asientos se propagan instantáneamente a todos los clientes conectados a un recital.
+- **Tarea de fondo concurrente:** un *thread* dedicado libera automáticamente las reservas temporales que expiran, sin bloquear la atención de los usuarios.
+
+### Dentro del alcance
+
+- Autenticación de usuarios mediante tokens JWT.
+- Listado de recitales y visualización interactiva de asientos por sección (Campo, Platea, Platea VIP).
+- Reserva temporal de asientos con expiración configurable y confirmación de compra.
+- Detección, resolución y registro (*logging*) de *race conditions*.
+- Simulación del procesamiento de pago (sin integración con pasarelas reales).
+- Actualización de disponibilidad en tiempo real vía WebSockets.
+
+### Fuera del alcance
+
+- Integración con pasarelas de pago reales (el pago es un *stub* simulado).
+- Gestión administrativa avanzada (alta/baja de recitales por interfaz, reportes de ventas).
+- Escalado horizontal multi-proceso de las notificaciones WebSocket (requeriría un *message broker* como Redis; la correctitud de las reservas, en cambio, sí escala por delegarse a la base de datos).
+- Emisión de entradas físicas o digitales (PDF, códigos QR).
+
 ## 🎯 Características
 
 - **Frontend interactivo** con selección visual de asientos
