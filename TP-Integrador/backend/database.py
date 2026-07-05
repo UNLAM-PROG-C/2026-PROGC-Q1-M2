@@ -45,7 +45,9 @@ def get_cursor(commit: bool = True):
     """Context manager that yields (cursor, conn). Auto-commits or rolls back."""
     p = get_pool()
     conn = p.getconn(timeout=POOL_ACQUIRE_TIMEOUT)
-es
+    try:
+        with conn.cursor() as cur:
+            yield cur, conn
             if commit:
                 conn.commit()
             else:
