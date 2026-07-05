@@ -19,6 +19,50 @@ Un sistema completo de reserva y venta de entradas para recitales con manejo ava
 - **PostgreSQL 18+**
 - **pip** (Python package manager)
 
+## 🧩 Frameworks y Dependencias
+
+### Backend (Python)
+
+| Dependencia | Versión | Rol |
+|-------------|---------|-----|
+| **FastAPI** | 0.109.0 | Framework web (API REST + WebSockets) |
+| **Uvicorn** | 0.27.0 | Servidor ASGI que corre el event loop |
+| **psycopg** | 3.2.13 | Driver de PostgreSQL (SQL directo, sin ORM) |
+| **psycopg_pool** | 3.2.4 | Pool de conexiones thread-safe |
+| **PyJWT** | 2.8.0 | Autenticación mediante tokens JWT |
+| **passlib** + **bcrypt** | 1.7.4 / 4.1.1 | Hashing seguro de contraseñas |
+| **slowapi** | 0.1.9 | Rate limiting (protección del login) |
+| **aiohttp** | 3.13.2 | Cliente HTTP asíncrono (pruebas de concurrencia) |
+
+### Base de datos
+
+- **PostgreSQL 18** — la concurrencia crítica se delega aquí (UPDATE atómico + row-level locking).
+
+### Frontend
+
+- **HTML5 + CSS3 + JavaScript (ES6+) puro**, sin frameworks ni librerías externas (no usa React/Vue/jQuery).
+
+## 🖥️ Restricciones y Compatibilidad
+
+### Requisitos de Hardware
+
+- **Sin requisitos especiales.** La aplicación es *I/O-bound* (espera de red y base de datos), no *CPU-bound*: no realiza cálculo intensivo ni requiere GPU.
+- **RAM recomendada:** ~1 GB libre es suficiente para el backend + PostgreSQL en desarrollo. El pool está configurado hasta 100 conexiones y PostgreSQL con `max_connections=200`; en cargas altas, más conexiones consumen más memoria en el servidor de BD.
+- Funciona en cualquier máquina moderna (x86-64 o ARM64, ej. Apple Silicon).
+
+### Restricciones de Sistema Operativo
+
+- **Multiplataforma.** El backend usa únicamente primitivas estándar y portables (`threading`, `asyncio`, sockets), sin llamadas específicas de un SO. Corre en **Linux, macOS y Windows**.
+- Los **scripts de ayuda** (`init_db.sh`, `run_server.sh`, `quick_start.sh`) están escritos en **Bash**, por lo que asumen un entorno Unix (Linux/macOS) o, en Windows, WSL o Git Bash.
+- **Con Docker no hay ninguna restricción de SO:** `docker compose up` levanta backend + PostgreSQL de forma idéntica en cualquier plataforma. Es la vía recomendada para evitar diferencias de entorno.
+
+### Restricciones de Navegador
+
+- Requiere un **navegador moderno "evergreen"**: **Chrome, Firefox, Edge o Safari** en versiones recientes (aprox. 2018 en adelante).
+- El frontend depende de APIs modernas: **WebSocket API**, **Fetch API**, **`localStorage`**, **`URLSearchParams`**, **`Set`**, además de sintaxis **ES6+** (`async/await`, *arrow functions*, *template literals*).
+- **No es compatible con Internet Explorer** (no soporta `fetch`, `async/await` ni WebSockets de forma adecuada).
+- **JavaScript debe estar habilitado.** Para las actualizaciones en tiempo real, el navegador debe poder establecer una conexión **WebSocket** (`ws://` o `wss://`) contra el servidor.
+
 ## 🚀 Instalación
 
 ### 1. Clonar el repositorio
