@@ -16,7 +16,8 @@ class ReservationCleaner(threading.Thread):
     Daemon thread that periodically frees expired temporary seat reservations.
 
     OS-level concurrency concepts used:
-    - threading.Thread: an OS-managed thread running independently of the web server
+    - threading.Thread: an OS-managed thread running independently of the
+      web server
     - threading.Event: used as a cancellable sleep (stop signal + timeout)
     - psycopg ConnectionPool: each call gets its own DB connection safely
 
@@ -31,7 +32,7 @@ class ReservationCleaner(threading.Thread):
 
     def run(self):
         logger.info(
-            f"[{self.name}] Started — checking every {CLEANUP_INTERVAL_SECONDS}s"
+            f"[{self.name}] Started (interval {CLEANUP_INTERVAL_SECONDS}s)"
         )
         while not self._stop_event.is_set():
             try:
@@ -68,12 +69,16 @@ class ReservationCleaner(threading.Thread):
 
         if released:
             logger.info(
-                f"[{self.name}] {len(released)} expired reservation(s) released."
+                f"[{self.name}] Freed {len(released)} expired reservation(s)."
             )
             for seat in released:
                 ws_manager.broadcast_from_thread(
                     seat["concert_id"],
-                    {"type": "seat_released", "seat_id": seat["id"], "status": "available"},
+                    {
+                        "type": "seat_released",
+                        "seat_id": seat["id"],
+                        "status": "available",
+                    },
                 )
 
     def stop(self):

@@ -8,7 +8,8 @@ class ConnectionManager:
     """
     Manages WebSocket connections per concert.
     Uses threading.Lock (OS-level primitive) for thread-safe access to the
-    connections dictionary, since broadcasts can be triggered from worker threads.
+    connections dictionary, since broadcasts can be triggered from worker
+    threads.
     """
 
     def __init__(self):

@@ -10,7 +10,9 @@ PURCHASE_TIMEOUT_MINUTES = int(os.getenv("PURCHASE_TIMEOUT_MINUTES", "10"))
 # Background cleanup interval
 CLEANUP_INTERVAL_SECONDS = int(os.getenv("CLEANUP_INTERVAL_SECONDS", "30"))
 # Seconds to wait for the cleaner thread to finish on shutdown before giving up
-CLEANER_SHUTDOWN_TIMEOUT_SECONDS = int(os.getenv("CLEANER_SHUTDOWN_TIMEOUT_SECONDS", "5"))
+CLEANER_SHUTDOWN_TIMEOUT_SECONDS = int(
+    os.getenv("CLEANER_SHUTDOWN_TIMEOUT_SECONDS", "5")
+)
 
 # Database
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -23,7 +25,7 @@ DB_MIN_CONNECTIONS = int(os.getenv("DB_MIN_CONNECTIONS", "5"))
 # PostgreSQL default max_connections=100; to scale to thousands of virtual
 # connections, a pooler like PgBouncer is required in front of the server.
 DB_MAX_CONNECTIONS = int(os.getenv("DB_MAX_CONNECTIONS", "100"))
-# Maximum time (seconds) to wait for a free connection from the pool before failing
+# Maximum time (seconds) to wait for a free pool connection before failing
 POOL_ACQUIRE_TIMEOUT = float(os.getenv("POOL_ACQUIRE_TIMEOUT", "30"))
 
 # JWT
@@ -32,7 +34,9 @@ LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "30/minute")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey-change-in-production-2026")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120")
+)
 
 # API pagination limits
 DEFAULT_PAGE_SIZE = 50

@@ -30,7 +30,8 @@ def log_race_condition(
 ):
     """
     Logs a detected race condition to file and DB.
-    Called when a seat reservation attempt returns rowcount=0 (seat already taken).
+    Called when a seat reservation attempt returns rowcount=0
+    (seat already taken).
     """
     thread_name = threading.current_thread().name
     _logger.info(
@@ -41,11 +42,11 @@ def log_race_condition(
         f"Thread: {thread_name}"
     )
 
-    # Persist to DB (import inside function to avoid circular imports at module load)
+    # Persist to DB (imported inside the function to avoid a circular import)
     try:
         from database import get_cursor
 
-        with get_cursor() as (cur, conn):
+        with get_cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO race_condition_log

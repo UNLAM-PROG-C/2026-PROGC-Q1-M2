@@ -9,8 +9,12 @@ PASSWORD_MAX_LENGTH = 128
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH)
-    password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
+    username: str = Field(
+        min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH
+    )
+    password: str = Field(
+        min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH
+    )
 
 
 class TokenResponse(BaseModel):

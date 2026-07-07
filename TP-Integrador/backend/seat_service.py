@@ -6,7 +6,7 @@ from ws_manager import manager as ws_manager
 
 
 def get_concert_seats(concert_id: int) -> List[Dict]:
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             """
             SELECT id, section, row_label, seat_number, status, price,
@@ -27,7 +27,8 @@ def reserve_seats(
     Atomically reserves one or more seats.
 
     Concurrency strategy: attempts the UPDATE directly (happy path, 1 query).
-    Only if it fails (rowcount=0) does it run an extra SELECT to build the error message.
+    Only if it fails (rowcount=0) does it run an extra SELECT to build the
+    error message.
 
     Seat IDs are sorted before processing to prevent deadlocks when two users
     try to reserve the same set of seats in different order.
@@ -46,10 +47,11 @@ def reserve_seats(
                 cur.execute(
                     """
                     UPDATE seats
-                    SET status                  = 'reserved',
-                        reserved_by             = %s,
-                        reserved_at             = NOW(),
-                        reservation_expires_at  = NOW() + (%s * INTERVAL '1 minute')
+                    SET status = 'reserved',
+                        reserved_by = %s,
+                        reserved_at = NOW(),
+                        reservation_expires_at =
+                            NOW() + (%s * INTERVAL '1 minute')
                     WHERE id = %s AND concert_id = %s AND status = 'available'
                     RETURNING id, section, row_label, seat_number, price
                     """,
@@ -61,11 +63,12 @@ def reserve_seats(
                     reserved.append(dict(result))
                     continue
 
-                # Failure path: rollback and SELECT only to build the error message
+                # Failure path: rollback, then SELECT only for the message
                 conn.rollback()
                 cur.execute(
                     """
-                    SELECT s.section, s.row_label, s.seat_number, c.name AS concert_name
+                    SELECT s.section, s.row_label, s.seat_number,
+                           c.name AS concert_name
                     FROM seats s
                     JOIN concerts c ON c.id = s.concert_id
                     WHERE s.id = %s AND s.concert_id = %s
@@ -75,7 +78,11 @@ def reserve_seats(
                 info = cur.fetchone()
 
                 if info is None:
-                    return False, f"Asiento ID {seat_id} no encontrado en este recital.", []
+                    return (
+                        False,
+                        f"Asiento ID {seat_id} no encontrado en este recital.",
+                        [],
+                    )
 
                 label = (
                     f"{info['section'].upper()} "
@@ -119,7 +126,7 @@ def reserve_seats(
 def release_seats(
     seat_ids: List[int], user_id: int, concert_id: int
 ) -> Tuple[bool, str]:
-    with get_cursor() as (cur, conn):
+    with get_cursor() as cur:
         cur.execute(
             """
             UPDATE seats
@@ -137,7 +144,11 @@ def release_seats(
     for seat_id in released_ids:
         ws_manager.broadcast_from_thread(
             concert_id,
-            {"type": "seat_released", "seat_id": seat_id, "status": "available"},
+            {
+                "type": "seat_released",
+                "seat_id": seat_id,
+                "status": "available",
+            },
         )
 
     return True, f"{len(released_ids)} asiento(s) liberado(s)."
@@ -176,7 +187,8 @@ def confirm_purchase(
             conn.rollback()
             return (
                 False,
-                "Algunos asientos no pudieron confirmarse (reserva expirada o invalida).",
+                "Algunos asientos no pudieron confirmarse "
+                "(reserva expirada o invalida).",
             )
 
         conn.commit()
@@ -194,11 +206,14 @@ def confirm_purchase(
             {"type": "seat_sold", "seat_id": seat["id"], "status": "sold"},
         )
 
-    return True, f"Compra confirmada. {len(sold)} entrada(s). Total: ${total:.2f}"
+    return (
+        True,
+        f"Compra confirmada. {len(sold)} entrada(s). Total: ${total:.2f}",
+    )
 
 
 def get_user_reserved_seats(user_id: int, concert_id: int) -> List[Dict]:
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             """
             SELECT id, section, row_label, seat_number, price,
