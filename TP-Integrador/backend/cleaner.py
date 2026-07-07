@@ -2,7 +2,11 @@ import threading
 import logging
 from database import get_pool
 from ws_manager import manager as ws_manager
-from config import CLEANUP_INTERVAL_SECONDS, POOL_ACQUIRE_TIMEOUT
+from config import (
+    CLEANUP_INTERVAL_SECONDS,
+    POOL_ACQUIRE_TIMEOUT,
+    CLEANER_SHUTDOWN_TIMEOUT_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,4 +93,4 @@ def stop_cleaner():
     global _cleaner
     if _cleaner:
         _cleaner.stop()
-        _cleaner.join(timeout=5)
+        _cleaner.join(timeout=CLEANER_SHUTDOWN_TIMEOUT_SECONDS)

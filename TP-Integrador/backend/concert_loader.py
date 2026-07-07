@@ -94,7 +94,7 @@ def load_concert_from_json(file_path: str) -> int:
             price = section_cfg["price"]
 
             for row_num in range(1, rows + 1):
-                row_label = chr(64 + row_num)  # 1→A, 2→B, …
+                row_label = chr(ord("A") + row_num - 1)  # 1→A, 2→B, …
                 for seat_num in range(1, per_row + 1):
                     seats_batch.append(
                         (concert_id, section_name, row_label, str(seat_num), price)

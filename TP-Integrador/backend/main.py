@@ -13,7 +13,10 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from config import FRONTEND_DIR, LOG_DIR, LOGIN_RATE_LIMIT
+from config import (
+    FRONTEND_DIR, LOG_DIR, LOGIN_RATE_LIMIT,
+    DEFAULT_PAGE_SIZE, MAX_CONCERTS_LIMIT, MAX_RACE_LOG_LIMIT,
+)
 from database import init_pool, close_pool, get_cursor
 from auth import authenticate_user, create_access_token, get_current_user
 from models import LoginRequest, ReserveSeatsRequest, ReleaseSeatsRequest, PaymentRequest
@@ -116,7 +119,9 @@ def get_me(current_user: dict = Depends(get_current_user)):
         )
         user = cur.fetchone()
         if user is None:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado."
+            )
         return dict(user)
 
 
@@ -127,7 +132,7 @@ def get_me(current_user: dict = Depends(get_current_user)):
 @app.get("/api/concerts")
 def list_concerts(
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_CONCERTS_LIMIT),
 ):
     with get_cursor(commit=False) as (cur, conn):
         cur.execute(
@@ -164,7 +169,9 @@ def get_concert(concert_id: int):
         )
         concert = cur.fetchone()
     if not concert:
-        raise HTTPException(status_code=404, detail="Recital no encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Recital no encontrado."
+        )
     return dict(concert)
 
 
@@ -189,7 +196,9 @@ def reserve(
     request: ReserveSeatsRequest, current_user: dict = Depends(get_current_user)
 ):
     if not request.seat_ids:
-        raise HTTPException(status_code=400, detail="No se especificaron asientos.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No se especificaron asientos."
+        )
 
     success, message, reserved = reserve_seats(
         seat_ids=request.seat_ids,
@@ -198,7 +207,7 @@ def reserve(
         concert_id=request.concert_id,
     )
     if not success:
-        raise HTTPException(status_code=409, detail=message)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
 
     return {"message": message, "reserved_seats": reserved}
 
@@ -236,7 +245,7 @@ async def process(
 
     if total == 0:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="No se encontraron asientos reservados válidos para este usuario.",
         )
 
@@ -249,7 +258,7 @@ async def process(
         concert_id=request.concert_id,
     )
     if not success:
-        raise HTTPException(status_code=400, detail=message)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return {"message": message, "transaction": payment_result}
 
@@ -280,7 +289,7 @@ async def websocket_endpoint(websocket: WebSocket, concert_id: int):
 @app.get("/api/admin/race-conditions")
 def race_conditions(
     current_user: dict = Depends(get_current_user),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_RACE_LOG_LIMIT),
 ):
     with get_cursor(commit=False) as (cur, conn):
         cur.execute(

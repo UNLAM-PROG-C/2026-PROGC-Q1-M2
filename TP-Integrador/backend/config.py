@@ -9,6 +9,8 @@ PURCHASE_TIMEOUT_MINUTES = int(os.getenv("PURCHASE_TIMEOUT_MINUTES", "10"))
 
 # Background cleanup interval
 CLEANUP_INTERVAL_SECONDS = int(os.getenv("CLEANUP_INTERVAL_SECONDS", "30"))
+# Seconds to wait for the cleaner thread to finish on shutdown before giving up
+CLEANER_SHUTDOWN_TIMEOUT_SECONDS = int(os.getenv("CLEANER_SHUTDOWN_TIMEOUT_SECONDS", "5"))
 
 # Database
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -31,6 +33,11 @@ LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "30/minute")
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey-change-in-production-2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
+
+# API pagination limits
+DEFAULT_PAGE_SIZE = 50
+MAX_CONCERTS_LIMIT = 200
+MAX_RACE_LOG_LIMIT = 500
 
 # Paths
 DATA_DIR = os.path.join(ROOT_DIR, "data")
