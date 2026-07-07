@@ -1,0 +1,6 @@
+# Development / tooling dependencies (not required at runtime).
+# Install with: pip install -r requirements-dev.txt
+#
+# pylint enforces the Google Python Style Guide via the .pylintrc file
+# (downloaded from https://google.github.io/styleguide/pylintrc).
+pylint>=3.3

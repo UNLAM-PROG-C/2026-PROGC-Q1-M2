@@ -30,22 +30,23 @@ def log_race_condition(
 ):
     """
     Logs a detected race condition to file and DB.
-    Called when a seat reservation attempt returns rowcount=0 (seat already taken).
+    Called when a seat reservation attempt returns rowcount=0
+    (seat already taken).
     """
     thread_name = threading.current_thread().name
     _logger.info(
-        f"[RACE_CONDITION] Asiento ID:{seat_id} ({seat_label}) "
-        f"del recital '{concert_name}' - "
-        f"Usuario '{loser_username}' (ID:{loser_user_id}) intentó reservar un asiento "
-        f"ya tomado por otro usuario. Solo 1 usuario obtuvo el asiento. "
+        f"[RACE_CONDITION] Seat ID:{seat_id} ({seat_label}) "
+        f"of concert '{concert_name}' - "
+        f"User '{loser_username}' (ID:{loser_user_id}) tried to reserve a seat "
+        f"already taken by another user. Only 1 user got the seat. "
         f"Thread: {thread_name}"
     )
 
-    # Persist to DB (import inside function to avoid circular imports at module load)
+    # Persist to DB (imported inside the function to avoid a circular import)
     try:
         from database import get_cursor
 
-        with get_cursor() as (cur, conn):
+        with get_cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO race_condition_log
@@ -55,4 +56,4 @@ def log_race_condition(
                 (seat_id, loser_user_id, loser_username, thread_name),
             )
     except Exception as e:
-        _logger.error(f"Error al persistir race condition en DB: {e}")
+        _logger.error(f"Error persisting race condition to DB: {e}")

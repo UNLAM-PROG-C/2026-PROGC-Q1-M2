@@ -20,7 +20,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict, expires_delta: Optional[timedelta] = None
+) -> str:
     to_encode = data.copy()
     if "sub" in to_encode:
         to_encode["sub"] = str(to_encode["sub"])
@@ -35,9 +37,9 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
     """
-    Valida el JWT y devuelve {id, username} sin tocar la base de datos.
-    Los datos de usuario completos (email, full_name) se obtienen solo cuando
-    el endpoint los necesita explícitamente (ej: GET /api/auth/me).
+    Validates the JWT and returns {id, username} without hitting the database.
+    Full user data (email, full_name) is fetched only when an endpoint
+    explicitly needs it (e.g. GET /api/auth/me).
     """
     token = credentials.credentials
     credentials_exception = HTTPException(
@@ -61,9 +63,10 @@ def get_current_user(
 
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
-            "SELECT id, username, password_hash, email, full_name FROM users WHERE username = %s",
+            "SELECT id, username, password_hash, email, full_name "
+            "FROM users WHERE username = %s",
             (username,),
         )
         user = cur.fetchone()

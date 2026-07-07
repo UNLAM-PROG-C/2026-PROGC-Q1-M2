@@ -1,7 +1,0 @@
-# === SESSION END ===
-
-Compare the implementation with:
-- /docs/architecture.md
-- /docs/requirements.md
-
-List inconsistencies and fix them.

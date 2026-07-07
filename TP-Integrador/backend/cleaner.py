@@ -2,7 +2,11 @@ import threading
 import logging
 from database import get_pool
 from ws_manager import manager as ws_manager
-from config import CLEANUP_INTERVAL_SECONDS, POOL_ACQUIRE_TIMEOUT
+from config import (
+    CLEANUP_INTERVAL_SECONDS,
+    POOL_ACQUIRE_TIMEOUT,
+    CLEANER_SHUTDOWN_TIMEOUT_SECONDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +16,8 @@ class ReservationCleaner(threading.Thread):
     Daemon thread that periodically frees expired temporary seat reservations.
 
     OS-level concurrency concepts used:
-    - threading.Thread: an OS-managed thread running independently of the web server
+    - threading.Thread: an OS-managed thread running independently of the
+      web server
     - threading.Event: used as a cancellable sleep (stop signal + timeout)
     - psycopg ConnectionPool: each call gets its own DB connection safely
 
@@ -27,16 +32,16 @@ class ReservationCleaner(threading.Thread):
 
     def run(self):
         logger.info(
-            f"[{self.name}] Iniciado — revisando cada {CLEANUP_INTERVAL_SECONDS}s"
+            f"[{self.name}] Started (interval {CLEANUP_INTERVAL_SECONDS}s)"
         )
         while not self._stop_event.is_set():
             try:
                 self._cleanup()
             except Exception as e:
-                logger.error(f"[{self.name}] Error en cleanup: {e}")
+                logger.error(f"[{self.name}] Cleanup error: {e}")
             # Waits for the interval OR wakes immediately if stop() is called
             self._stop_event.wait(timeout=CLEANUP_INTERVAL_SECONDS)
-        logger.info(f"[{self.name}] Detenido.")
+        logger.info(f"[{self.name}] Stopped.")
 
     def _cleanup(self):
         p = get_pool()
@@ -64,12 +69,16 @@ class ReservationCleaner(threading.Thread):
 
         if released:
             logger.info(
-                f"[{self.name}] {len(released)} reserva(s) expirada(s) liberada(s)."
+                f"[{self.name}] Freed {len(released)} expired reservation(s)."
             )
             for seat in released:
                 ws_manager.broadcast_from_thread(
                     seat["concert_id"],
-                    {"type": "seat_released", "seat_id": seat["id"], "status": "available"},
+                    {
+                        "type": "seat_released",
+                        "seat_id": seat["id"],
+                        "status": "available",
+                    },
                 )
 
     def stop(self):
@@ -89,4 +98,4 @@ def stop_cleaner():
     global _cleaner
     if _cleaner:
         _cleaner.stop()
-        _cleaner.join(timeout=5)
+        _cleaner.join(timeout=CLEANER_SHUTDOWN_TIMEOUT_SECONDS)

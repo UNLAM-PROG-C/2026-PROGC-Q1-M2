@@ -4,7 +4,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import (
-    FastAPI, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+    FastAPI, Depends, HTTPException, Query, Request,
+    WebSocket, WebSocketDisconnect, status,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -13,10 +14,15 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from config import FRONTEND_DIR, LOG_DIR, LOGIN_RATE_LIMIT
+from config import (
+    FRONTEND_DIR, LOG_DIR, LOGIN_RATE_LIMIT,
+    DEFAULT_PAGE_SIZE, MAX_CONCERTS_LIMIT, MAX_RACE_LOG_LIMIT,
+)
 from database import init_pool, close_pool, get_cursor
 from auth import authenticate_user, create_access_token, get_current_user
-from models import LoginRequest, ReserveSeatsRequest, ReleaseSeatsRequest, PaymentRequest
+from models import (
+    LoginRequest, ReserveSeatsRequest, ReleaseSeatsRequest, PaymentRequest,
+)
 from ws_manager import manager as ws_manager
 from seat_service import (
     get_concert_seats, reserve_seats, release_seats,
@@ -40,19 +46,19 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Iniciando Sistema de Venta de Entradas…")
+async def lifespan(_app: FastAPI):
+    logger.info("Starting Ticket Sales System…")
     init_pool()
     load_all_concerts()
-    # get_running_loop() is the correct call inside an async context (Python 3.10+)
+    # get_running_loop() is the correct call inside an async context
     ws_manager.set_event_loop(asyncio.get_running_loop())
     start_cleaner()
-    logger.info("Sistema iniciado correctamente.")
+    logger.info("System started successfully.")
     yield
-    logger.info("Deteniendo sistema…")
+    logger.info("Stopping system…")
     stop_cleaner()
     close_pool()
-    logger.info("Sistema detenido.")
+    logger.info("System stopped.")
 
 
 # ---------------------------------------------------------------------------
@@ -86,14 +92,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 @app.post("/api/auth/login")
 @limiter.limit(LOGIN_RATE_LIMIT)
 def login(request: Request, body: LoginRequest):
+    # `request` is required by slowapi's rate limiter (looked up by name),
+    # even though it is not referenced directly in this handler.
+    # pylint: disable=unused-argument
     user = authenticate_user(body.username, body.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos.",
         )
-    # Username is embedded in the token to avoid a DB query on every authenticated request
-    token = create_access_token({"sub": user["id"], "username": user["username"]})
+    # Username is embedded in the token to avoid a DB query on every
+    # authenticated request
+    token = create_access_token(
+        {"sub": user["id"], "username": user["username"]}
+    )
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -109,14 +121,17 @@ def login(request: Request, body: LoginRequest):
 @app.get("/api/auth/me")
 def get_me(current_user: dict = Depends(get_current_user)):
     # This endpoint needs the full user record → hit the DB
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             "SELECT id, username, email, full_name FROM users WHERE id = %s",
             (current_user["id"],),
         )
         user = cur.fetchone()
         if user is None:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado.",
+            )
         return dict(user)
 
 
@@ -127,14 +142,16 @@ def get_me(current_user: dict = Depends(get_current_user)):
 @app.get("/api/concerts")
 def list_concerts(
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_CONCERTS_LIMIT),
 ):
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             """
-            SELECT c.id, c.name, c.artist, c.event_date, c.venue, c.description,
-                   COUNT(CASE WHEN s.status = 'available' THEN 1 END) AS available_seats,
-                   COUNT(s.id)                                         AS total_seats
+            SELECT c.id, c.name, c.artist, c.event_date, c.venue,
+                   c.description,
+                   COUNT(CASE WHEN s.status = 'available' THEN 1 END)
+                       AS available_seats,
+                   COUNT(s.id) AS total_seats
             FROM concerts c
             LEFT JOIN seats s ON s.concert_id = c.id
             WHERE c.is_active = TRUE
@@ -149,12 +166,14 @@ def list_concerts(
 
 @app.get("/api/concerts/{concert_id}")
 def get_concert(concert_id: int):
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             """
-            SELECT c.id, c.name, c.artist, c.event_date, c.venue, c.description,
-                   COUNT(CASE WHEN s.status = 'available' THEN 1 END) AS available_seats,
-                   COUNT(s.id)                                         AS total_seats
+            SELECT c.id, c.name, c.artist, c.event_date, c.venue,
+                   c.description,
+                   COUNT(CASE WHEN s.status = 'available' THEN 1 END)
+                       AS available_seats,
+                   COUNT(s.id) AS total_seats
             FROM concerts c
             LEFT JOIN seats s ON s.concert_id = c.id
             WHERE c.id = %s AND c.is_active = TRUE
@@ -164,7 +183,10 @@ def get_concert(concert_id: int):
         )
         concert = cur.fetchone()
     if not concert:
-        raise HTTPException(status_code=404, detail="Recital no encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recital no encontrado.",
+        )
     return dict(concert)
 
 
@@ -189,7 +211,10 @@ def reserve(
     request: ReserveSeatsRequest, current_user: dict = Depends(get_current_user)
 ):
     if not request.seat_ids:
-        raise HTTPException(status_code=400, detail="No se especificaron asientos.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se especificaron asientos.",
+        )
 
     success, message, reserved = reserve_seats(
         seat_ids=request.seat_ids,
@@ -198,7 +223,9 @@ def reserve(
         concert_id=request.concert_id,
     )
     if not success:
-        raise HTTPException(status_code=409, detail=message)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=message
+        )
 
     return {"message": message, "reserved_seats": reserved}
 
@@ -207,7 +234,7 @@ def reserve(
 def release(
     request: ReleaseSeatsRequest, current_user: dict = Depends(get_current_user)
 ):
-    success, message = release_seats(
+    _, message = release_seats(
         seat_ids=request.seat_ids,
         user_id=current_user["id"],
         concert_id=request.concert_id,
@@ -223,7 +250,7 @@ def release(
 async def process(
     request: PaymentRequest, current_user: dict = Depends(get_current_user)
 ):
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             """
             SELECT COALESCE(SUM(price), 0) AS total
@@ -236,12 +263,17 @@ async def process(
 
     if total == 0:
         raise HTTPException(
-            status_code=400,
-            detail="No se encontraron asientos reservados válidos para este usuario.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "No se encontraron asientos reservados válidos "
+                "para este usuario."
+            ),
         )
 
     # await: does not block the event loop during payment latency simulation
-    payment_result = await process_payment(current_user["id"], total, request.payment_method)
+    payment_result = await process_payment(
+        current_user["id"], total, request.payment_method
+    )
 
     success, message = confirm_purchase(
         seat_ids=request.seat_ids,
@@ -249,7 +281,9 @@ async def process(
         concert_id=request.concert_id,
     )
     if not success:
-        raise HTTPException(status_code=400, detail=message)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=message
+        )
 
     return {"message": message, "transaction": payment_result}
 
@@ -262,15 +296,15 @@ async def process(
 async def websocket_endpoint(websocket: WebSocket, concert_id: int):
     await ws_manager.connect(concert_id, websocket)
     logger.info(
-        f"WS conectado — recital {concert_id} "
-        f"({ws_manager.get_connection_count(concert_id)} conexión/es activa/s)"
+        f"WS connected — concert {concert_id} "
+        f"({ws_manager.get_connection_count(concert_id)} active connection(s))"
     )
     try:
         while True:
             await websocket.receive_text()  # keep-alive
     except WebSocketDisconnect:
         ws_manager.disconnect(concert_id, websocket)
-        logger.info(f"WS desconectado — recital {concert_id}")
+        logger.info(f"WS disconnected — concert {concert_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -279,10 +313,10 @@ async def websocket_endpoint(websocket: WebSocket, concert_id: int):
 
 @app.get("/api/admin/race-conditions")
 def race_conditions(
-    current_user: dict = Depends(get_current_user),
-    limit: int = Query(default=50, ge=1, le=500),
+    _current_user: dict = Depends(get_current_user),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_RACE_LOG_LIMIT),
 ):
-    with get_cursor(commit=False) as (cur, conn):
+    with get_cursor(commit=False) as cur:
         cur.execute(
             """
             SELECT rcl.id, rcl.seat_id, rcl.loser_user_id, rcl.loser_username,
