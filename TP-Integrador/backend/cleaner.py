@@ -31,16 +31,16 @@ class ReservationCleaner(threading.Thread):
 
     def run(self):
         logger.info(
-            f"[{self.name}] Iniciado — revisando cada {CLEANUP_INTERVAL_SECONDS}s"
+            f"[{self.name}] Started — checking every {CLEANUP_INTERVAL_SECONDS}s"
         )
         while not self._stop_event.is_set():
             try:
                 self._cleanup()
             except Exception as e:
-                logger.error(f"[{self.name}] Error en cleanup: {e}")
+                logger.error(f"[{self.name}] Cleanup error: {e}")
             # Waits for the interval OR wakes immediately if stop() is called
             self._stop_event.wait(timeout=CLEANUP_INTERVAL_SECONDS)
-        logger.info(f"[{self.name}] Detenido.")
+        logger.info(f"[{self.name}] Stopped.")
 
     def _cleanup(self):
         p = get_pool()
@@ -68,7 +68,7 @@ class ReservationCleaner(threading.Thread):
 
         if released:
             logger.info(
-                f"[{self.name}] {len(released)} reserva(s) expirada(s) liberada(s)."
+                f"[{self.name}] {len(released)} expired reservation(s) released."
             )
             for seat in released:
                 ws_manager.broadcast_from_thread(

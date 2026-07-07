@@ -35,9 +35,9 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
     """
-    Valida el JWT y devuelve {id, username} sin tocar la base de datos.
-    Los datos de usuario completos (email, full_name) se obtienen solo cuando
-    el endpoint los necesita explícitamente (ej: GET /api/auth/me).
+    Validates the JWT and returns {id, username} without hitting the database.
+    Full user data (email, full_name) is fetched only when an endpoint
+    explicitly needs it (e.g. GET /api/auth/me).
     """
     token = credentials.credentials
     credentials_exception = HTTPException(

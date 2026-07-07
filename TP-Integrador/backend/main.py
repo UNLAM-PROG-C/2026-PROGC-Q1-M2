@@ -44,18 +44,18 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Iniciando Sistema de Venta de Entradas…")
+    logger.info("Starting Ticket Sales System…")
     init_pool()
     load_all_concerts()
     # get_running_loop() is the correct call inside an async context (Python 3.10+)
     ws_manager.set_event_loop(asyncio.get_running_loop())
     start_cleaner()
-    logger.info("Sistema iniciado correctamente.")
+    logger.info("System started successfully.")
     yield
-    logger.info("Deteniendo sistema…")
+    logger.info("Stopping system…")
     stop_cleaner()
     close_pool()
-    logger.info("Sistema detenido.")
+    logger.info("System stopped.")
 
 
 # ---------------------------------------------------------------------------
@@ -271,15 +271,15 @@ async def process(
 async def websocket_endpoint(websocket: WebSocket, concert_id: int):
     await ws_manager.connect(concert_id, websocket)
     logger.info(
-        f"WS conectado — recital {concert_id} "
-        f"({ws_manager.get_connection_count(concert_id)} conexión/es activa/s)"
+        f"WS connected — concert {concert_id} "
+        f"({ws_manager.get_connection_count(concert_id)} active connection(s))"
     )
     try:
         while True:
             await websocket.receive_text()  # keep-alive
     except WebSocketDisconnect:
         ws_manager.disconnect(concert_id, websocket)
-        logger.info(f"WS desconectado — recital {concert_id}")
+        logger.info(f"WS disconnected — concert {concert_id}")
 
 
 # ---------------------------------------------------------------------------

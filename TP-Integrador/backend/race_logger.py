@@ -34,10 +34,10 @@ def log_race_condition(
     """
     thread_name = threading.current_thread().name
     _logger.info(
-        f"[RACE_CONDITION] Asiento ID:{seat_id} ({seat_label}) "
-        f"del recital '{concert_name}' - "
-        f"Usuario '{loser_username}' (ID:{loser_user_id}) intentó reservar un asiento "
-        f"ya tomado por otro usuario. Solo 1 usuario obtuvo el asiento. "
+        f"[RACE_CONDITION] Seat ID:{seat_id} ({seat_label}) "
+        f"of concert '{concert_name}' - "
+        f"User '{loser_username}' (ID:{loser_user_id}) tried to reserve a seat "
+        f"already taken by another user. Only 1 user got the seat. "
         f"Thread: {thread_name}"
     )
 
@@ -55,4 +55,4 @@ def log_race_condition(
                 (seat_id, loser_user_id, loser_username, thread_name),
             )
     except Exception as e:
-        _logger.error(f"Error al persistir race condition en DB: {e}")
+        _logger.error(f"Error persisting race condition to DB: {e}")
