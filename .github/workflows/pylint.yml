@@ -1,0 +1,39 @@
+name: Pylint (TP-Integrador)
+
+# Runs the Google Python Style Guide checks (via .pylintrc) on the backend.
+# Triggered only when TP-Integrador code or this workflow changes.
+on:
+  push:
+    paths:
+      - "TP-Integrador/**"
+      - ".github/workflows/pylint.yml"
+  pull_request:
+    paths:
+      - "TP-Integrador/**"
+      - ".github/workflows/pylint.yml"
+
+jobs:
+  pylint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: TP-Integrador
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Runtime deps let pylint resolve imports (no false import-error);
+          # dev deps provide pylint itself.
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run pylint
+        # Passes if the score is >= 9.0; always fails on real errors/fatals.
+        run: pylint --rcfile=.pylintrc backend/ --fail-under=9 --fail-on=E,F
