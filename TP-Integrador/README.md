@@ -66,7 +66,7 @@ El sistema permite a varios usuarios, de manera concurrente, autenticarse, explo
 
 ### Base de datos
 
-- **PostgreSQL 18** — la concurrencia crítica se delega aquí (UPDATE atómico + row-level locking).
+- **PostgreSQL 18** — la concurrencia crítica se delega acá (UPDATE atómico + row-level locking).
 
 ### Frontend
 
@@ -141,7 +141,7 @@ El servidor estará disponible en:
 
 ### Acceso a la aplicación
 
-1. Abre http://localhost:8000 en tu navegador
+1. Abrí http://localhost:8000 en tu navegador
 2. Ingresa con las credenciales de prueba:
    - **Usuario**: `test_user`
    - **Contraseña**: `test123`
@@ -166,7 +166,7 @@ Las pruebas incluyen:
 ## 📊 Estructura del Proyecto
 
 ```
-tp-metricas/
+TP-Integrador/
 ├── backend/                    # Backend FastAPI
 │   ├── main.py                # Punto de entrada
 │   ├── config.py              # Configuración
@@ -192,7 +192,8 @@ tp-metricas/
 │   └── seed.sql               # Datos de prueba
 ├── data/                       # Datos de recitales en JSON
 │   ├── recital_rock_nacional.json
-│   └── recital_pop_internacional.json
+│   ├── recital_pop_internacional.json
+│   └── recital_jazz.json
 ├── logs/                       # Logs de la aplicación
 ├── tests/                      # Pruebas
 │   └── concurrent_test.py     # Pruebas de concurrencia
@@ -213,7 +214,7 @@ DB_NAME=ticketdb
 DB_USER=ticketuser
 DB_PASSWORD=ticketpass
 DB_MIN_CONNECTIONS=5
-DB_MAX_CONNECTIONS=20
+DB_MAX_CONNECTIONS=100
 
 # Servidor
 HOST=0.0.0.0
@@ -235,7 +236,7 @@ SECRET_KEY=supersecretkey-change-in-production-2026
 1. **Login**: Autenticación con usuario/contraseña
 2. **Seleccionar Recital**: Ver lista de conciertos disponibles
 3. **Elegir Asientos**: Seleccionar asientos visualmente con actualizaciones en tiempo real
-4. **Reservar**: Reservar los asientos por 10 minutos
+4. **Reservar**: Reservar los asientos por 5 minutos
 5. **Pagar**: Confirmar la compra (pago simulado)
 6. **Confirmación**: Entradas compradas exitosamente
 
@@ -259,7 +260,7 @@ Esta estrategia garantiza que:
 
 - **Threads**: ReservationCleaner (limpieza automática)
 - **Locks (OS-level)**: threading.Lock para WebSocket manager
-- **Connection Pool**: psycopg2 ThreadedConnectionPool
+- **Connection Pool**: psycopg (v3) ConnectionPool (thread-safe)
 - **Sincronización**: threading.Event para parar el cleaner
 - **Atomicidad en BD**: Transacciones y consultas atómicas
 
@@ -271,7 +272,7 @@ Los logs se guardan en `logs/`:
 
 ### Ejemplo de Log de Race Condition
 ```
-2026-05-25 19:45:32 [RACE_CONDITION] Asiento ID:145 (CAMPO A1) del recital 'Rock Nacional: La Gran Noche' - Usuario 'testuser5' (ID:7) intentó reservar un asiento ya tomado por otro usuario. Solo 1 usuario obtuvo el asiento. Thread: ThreadPoolExecutor-0_0
+2026-07-08 02:20:05 [RACE_CONDITION] Seat ID:812 (CAMPO B8) of concert 'Rock Nacional: La Gran Noche' - User 'testuser5' (ID:7) tried to reserve a seat already taken by another user. Only 1 user got the seat. Thread: AnyIO worker thread
 ```
 
 ## 🔄 API Endpoints
@@ -288,8 +289,7 @@ Los logs se guardan en `logs/`:
 ### Asientos
 - `GET /api/concerts/{concert_id}/my-seats` - Asientos reservados del usuario
 - `POST /api/seats/reserve` - Reservar asientos
-- `POST /api/seats/release` - Liberar asientos
-- `POST /api/seats/confirm` - Confirmar compra
+- `POST /api/seats/release` - Liberar asientos (la compra se confirma vía `/api/payment/process`)
 
 ### Pagos
 - `POST /api/payment/process` - Procesar pago (simulado)
@@ -330,11 +330,11 @@ El sistema evita deadlocks mediante:
 - Reservas siempre en el mismo orden
 - Transacciones cortas y precisas
 - No se mantienen locks entre transacciones
-- Timeout de 10 minutos en reservas temporales
+- Timeout de 5 minutos en reservas temporales
 
 ### Thread Safety
 - **WebSocket Manager**: Usa `threading.Lock` (primitiva de SO)
-- **Connection Pool**: psycopg2 proporciona sincronización interna
+- **Connection Pool**: psycopg (v3) proporciona sincronización interna
 - **Reserva Cleaner**: Thread daemon con Event para parada limpia
 
 ## 📄 Licencia
