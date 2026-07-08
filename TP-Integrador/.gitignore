@@ -15,6 +15,7 @@ venv/
 env/
 .venv/
 ENV/
+logs/
 
 # Environment variables
 .env
