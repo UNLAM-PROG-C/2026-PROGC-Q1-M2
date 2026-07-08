@@ -114,6 +114,7 @@
 
             await loadConcertInfo();
             await loadSeats();
+            await loadMyReservedSeats();
             connectWebSocket();
         });
 
@@ -149,6 +150,36 @@
                 renderSeats();
             } catch (error) {
                 console.error('Error loading seats:', error);
+            }
+        }
+
+        async function loadMyReservedSeats() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`/api/concerts/${concertId}/my-seats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const mySeats = await response.json();
+                if (mySeats.length === 0) return;
+
+                // Restore the pending reservation so the user can pay or cancel it.
+                mySeats.forEach(seat => selectedSeats.add(seat.id));
+
+                const rawExpiry = mySeats[0].reservation_expires_at;
+                const expiresAt = rawExpiry ? new Date(rawExpiry).getTime() : null;
+                reservationStartTime = (expiresAt && expiresAt > Date.now())
+                    ? expiresAt - RESERVATION_TIMEOUT_MS
+                    : Date.now();
+                startReservationTimer();
+
+                const reserveBtn = document.getElementById('reserveBtn');
+                reserveBtn.textContent = 'Ir a Pagar';
+                reserveBtn.onclick = goToPayment;
+
+                renderSeats();
+            } catch (error) {
+                console.error('Error loading reserved seats:', error);
             }
         }
 
@@ -213,9 +244,15 @@
             updateSidebar();
         }
 
-        function toggleSeat(seatId, seat) {
+        async function toggleSeat(seatId, seat) {
             if (selectedSeats.has(seatId)) {
                 selectedSeats.delete(seatId);
+                // If it was already reserved in the backend (a restored
+                // reservation), release it now so it does not stay held.
+                if (seat.status === 'reserved') {
+                    await releaseSeats([seatId]);
+                    allSeats[seatId].status = 'available';
+                }
             } else if (seat.status === 'available') {
                 selectedSeats.add(seatId);
             }
@@ -356,26 +393,29 @@
             window.location.href = `/payment?concert=${concertId}&seats=${seatIds.join(',')}`;
         }
 
+        async function releaseSeats(seatIds) {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/api/seats/release', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    seat_ids: seatIds,
+                    concert_id: concertId
+                })
+            });
+            return response.ok;
+        }
+
         document.getElementById('cancelBtn').addEventListener('click', async () => {
             if (selectedSeats.size === 0) return;
 
-            const token = localStorage.getItem('token');
             const seatIds = Array.from(selectedSeats);
 
             try {
-                const response = await fetch('/api/seats/release', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        seat_ids: seatIds,
-                        concert_id: concertId
-                    })
-                });
-
-                if (response.ok) {
+                if (await releaseSeats(seatIds)) {
                     selectedSeats.clear();
                     reservationStartTime = null;
                     renderSeats();

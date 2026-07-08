@@ -5,7 +5,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 
 # Reservation timeout in minutes (configurable via env)
 RESERVATION_TIMEOUT_MINUTES = int(os.getenv("RESERVATION_TIMEOUT_MINUTES", "5"))
-PURCHASE_TIMEOUT_MINUTES = int(os.getenv("PURCHASE_TIMEOUT_MINUTES", "10"))
+PURCHASE_TIMEOUT_MINUTES = int(os.getenv("PURCHASE_TIMEOUT_MINUTES", "5"))
 
 # Background cleanup interval
 CLEANUP_INTERVAL_SECONDS = int(os.getenv("CLEANUP_INTERVAL_SECONDS", "30"))
